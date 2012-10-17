@@ -17,6 +17,21 @@ CHIP PC {
     OUT out[16];
 
     PARTS:
-    // Put your code here.
+    // store new value?
+    Or(a=load, b=inc, out=loadinc1);
+    Or(a=loadinc1, b=reset, out=loadinc);
+
+    // Increment
+    Inc16(in=regout, out=reginc);
+    Mux16(a=regout, b=reginc, sel=inc, out=regout1);
+
+    // Load
+    Mux16(a=regout1, b=in, sel=load, out=regout2);
+    
+    // Reset
+    Mux16(a=regout2, b=false, sel=reset, out=regout3);
+
+    // Save (if load/reset or inc was 1) 
+    Register(in=regout3, load=loadinc, out=regout, out=out);
 }
 
