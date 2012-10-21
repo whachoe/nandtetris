@@ -9,3 +9,27 @@
 // program clears the screen, i.e. writes "white" in every pixel.
 
 // Put your code here.
+(LOOP)
+(LISTEN)
+// Listen for key
+@KBD
+D=M
+@BLACKEN
+D;JGT
+
+(WHITEN)
+@SCREEN
+
+
+@LISTEN
+0;JMP
+
+// Blacken screen
+(BLACKEN)
+
+@LISTEN
+0;JMP
+
+
+@LOOP
+0;JMP

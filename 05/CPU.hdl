@@ -26,17 +26,74 @@
 
 CHIP CPU {
 
-    IN  inM[16],         // M value input  (M = contents of RAM[A])
-        instruction[16], // Instruction for execution
-        reset;           // Signals whether to re-start the current program
-                         // (reset == 1) or continue executing the current
-                         // program (reset == 0).
+        IN  inM[16],         // M value input  (M = contents of RAM[A])
+            instruction[16], // Instruction for execution
+            reset;           // Signals whether to re-start the current program
+        // (reset == 1) or continue executing the current
+        // program (reset == 0).
 
-    OUT outM[16],        // M value output
-        writeM,          // Write into M? 
-        addressM[15],    // RAM address (of M)
-        pc[15];          // ROM address (of next instruction)
+        OUT outM[16],        // M value output
+            writeM,          // Write into M? 
+            addressM[15],    // RAM address (of M)
+            pc[15];          // ROM address (of next instruction)
 
-     PARTS:
-    // Put your code here.
+PARTS:
+        // First we determine if the instruction is A or C
+        And(a=instruction[15], b=true, out=C);
+        Not(in=C, out=A);
+
+        // Now we determine if we need to load a new value into ARegister
+        Or(a=A, b=instruction[5], out=loadA);
+        And(a=C, b=instruction[5], out=saveinA);
+        Mux16(a=instruction, b=outalu, sel=saveinA, out=outmux1);
+        ARegister(in=outmux1, load=loadA, out=outA, out[0..14]=addressM);
+
+        // Load D?
+        And(a=instruction[4], b=C, out=loadD);
+        DRegister(in=outalu, load=loadD, out=outD);
+
+        // Write into M?
+        And(a=instruction[3], b=C, out=writeM);
+
+        // Is A an address or a value?
+        And(a=instruction[12], b=C, out=AisMemory);
+        Mux16(a=outA, b=inM, sel=AisMemory, out=outAM);
+
+        // ALU
+        ALU(x=outD, y=outAM, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out=outM, out=outalu, zr=aluzr, ng=alung);
+
+        // Checking whether ALU output was negative or zero
+        Not(in=aluzr, out=nzr);
+        Not(in=alung, out=nng);
+
+        // Jump conditions: Check output of alu and compare with jump bits
+        // Less Than : j1=1,zr=0,ng=1
+        And(a=instruction[2],b=nzr,out=aj1nzr);
+        And(a=aj1nzr,b=alung,out=ltflag);
+
+        // Equal : j2=1,zr=1,ng=0
+        And(a=instruction[1],b=aluzr,out=aj2zr);
+        And(a=aj2zr,b=nng,out=eqflag);
+
+        // Greater Than : j3=1,zr=0,ng=0
+        And(a=instruction[0],b=nzr,out=aj3nzr);
+        And(a=aj3nzr,b=nng,out=gtflag);
+
+        // Diff : j1=1,j3=1,zr=0
+        And(a=instruction[2],b=instruction[0],out=andj1j3);
+        And(a=andj1j3,b=nzr,out=dfflag);
+
+        // JMP : j1=j2=j3=1
+        And(a=andj1j3,b=instruction[1],out=jmpflag);
+
+        // Load Flag of PC
+        Or(a=ltflag,b=eqflag,out=leflag);
+        Or(a=leflag,b=gtflag,out=legflag);
+        Or(a=legflag,b=dfflag,out=legdflag);
+        Or(a=legdflag,b=jmpflag,out=legdjflag);
+        And(a=C,b=legdjflag,out=jmp);
+
+        // If not a JUMP: Increase counter
+        Not(in=jmp, out=pcinc);
+        PC(in=outA, load=jmp, inc=pcinc, reset=reset,out[0..14]=pc);
 }
