@@ -69,15 +69,15 @@ PARTS:
         // Jump conditions: Check output of alu and compare with jump bits
         // Less Than : j1=1,zr=0,ng=1
         And(a=instruction[2],b=nzr,out=aj1nzr);
-        And(a=aj1nzr,b=alung,out=ltflag);
+        And(a=aj1nzr,b=alung,out=lt);
 
         // Equal : j2=1,zr=1,ng=0
         And(a=instruction[1],b=aluzr,out=aj2zr);
-        And(a=aj2zr,b=nng,out=eqflag);
+        And(a=aj2zr,b=nng,out=eq);
 
         // Greater Than : j3=1,zr=0,ng=0
         And(a=instruction[0],b=nzr,out=aj3nzr);
-        And(a=aj3nzr,b=nng,out=gtflag);
+        And(a=aj3nzr,b=nng,out=gt);
 
         // Diff : j1=1,j3=1,zr=0
         And(a=instruction[2],b=instruction[0],out=andj1j3);
@@ -87,8 +87,8 @@ PARTS:
         And(a=andj1j3,b=instruction[1],out=jmpflag);
 
         // Load Flag of PC
-        Or(a=ltflag,b=eqflag,out=leflag);
-        Or(a=leflag,b=gtflag,out=legflag);
+        Or(a=lt,b=eq,out=leflag);
+        Or(a=leflag,b=gt,out=legflag);
         Or(a=legflag,b=dfflag,out=legdflag);
         Or(a=legdflag,b=jmpflag,out=legdjflag);
         And(a=C,b=legdjflag,out=jmp);
