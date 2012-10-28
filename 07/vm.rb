@@ -5,7 +5,7 @@
 # In a second phase, we translate the current record into ASM
 # 
 # Some notes about the translation to assember:
-# . we leave all use memory dirty. this means that parts of the stack might contain values which aren't 
+# . we leave all used memory dirty. this means that parts of the stack might contain values which aren't 
 #   valid anymore. But we don't care since they will be overwritten anyway next time something gets pushed.
 #   Same goes for temporary memory-registers we use in calculations (notably R13-15)
 #
@@ -25,18 +25,19 @@ class Parser
   
   COMMANDS = {
     "push"  => {"type" => C_PUSH, "args" => 2, "asm" => :push},
+    "pop"   => {"type" => C_POP, "args" => 2, "asm" => :pop},
     "add"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :add},
     "sub"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :sub},
     "and"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :andf},
     "or"    => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :orf},
-    "eq"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :eq},
-    "lt"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :lt},
-    "gt"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :gt},
+    "eq"    => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :eq},
+    "lt"    => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :lt},
+    "gt"    => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :gt},
     "not"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :notf},
     "neg"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :neg}
   }
   
-  attr_reader :type, :command, :args, :filename, :linenumber, :commandinfo
+  attr_reader :command, :args, :filename, :linenumber, :commandinfo
   
   def error(msg)
     puts "#{@filename}:#{@linenumber}: #{msg}"
@@ -72,20 +73,89 @@ class Parser
     
     case segment.to_s
     when "constant"
-     asm  = "@"+index+"\n"
-     asm += "D=A\n"
-     asm += "@SP\n"
-     asm += "A=M\n"
-     asm += "M=D\n"
-     asm += spinc
-    # later on we get more segmenttypes here  
+      asm  = "@#{index.to_s}\n"
+      asm += "D=A\n"
+      asm += "@SP\n"
+      asm += "A=M\n"
+      asm += "M=D\n"
+    when "local"
+      asm = push_helper("LCL")
+    when "argument"
+      asm = push_helper("ARG")
+    when "that"
+      asm = push_helper("THAT")
+    when "this"
+      asm = push_helper("THIS")
+    when "static"
+      address = index.to_i + 16 # 16 = base of static-segment 
+      asm  = "@#{address.to_s}\n"
+      asm += "D=M\n"  
+      asm += "@SP\n"
+      asm += "A=M\n"
+      asm += "M=D\n"
+    when "pointer"
+      address = index.to_i + 3 # 3 = base of pointer-segment
+      asm  = "@#{address.to_s}\n"
+      asm += "D=M\n"  
+      asm += "@SP\n"
+      asm += "A=M\n"
+      asm += "M=D\n"
+    when "temp"
+      address = index.to_i + 5 # 5 = base of temp-segment
+      asm  = "@#{address.to_s}\n"
+      asm += "D=M\n"  
+      asm += "@SP\n"
+      asm += "A=M\n"
+      asm += "M=D\n"
+
+    else 
+      error "push: Wrong segment defined: #{segment.to_s}"
     end
     
+    asm += spinc
     return asm
   end
-
-  def pop (segment, index)
+  
+  def pop
+    segment = @args[0]
+    index   = @args[1].to_i
     
+    case segment.to_s
+    when "local"
+      asm = pop_helper("LCL")
+    when "argument"
+      asm = pop_helper("ARG")
+    when "that"
+      asm = pop_helper("THAT")
+    when "this"
+      asm = pop_helper("THIS")    
+    when "static"
+      address = index.to_i + 16 # 16 = base of static-segment 
+      asm  = "@SP\n"
+      asm += "A=M-1\n"
+      asm += "D=M\n"  # D contains value of SP-1 register
+      asm += "@#{address.to_s}\n"
+      asm += "M=D\n"  
+    when "pointer"
+      address = index + 3 # 3 = base of pointer-segment
+      asm  = "@SP\n"
+      asm += "A=M-1\n"
+      asm += "D=M\n"  # D contains value of SP-1 register
+      asm += "@#{address.to_s}\n"
+      asm += "M=D\n"  
+    when "temp"
+      address = index + 5 # 5 = base of temp-segment
+      asm  = "@SP\n"
+      asm += "A=M-1\n"
+      asm += "D=M\n"  # D contains value of SP-1 register
+      asm += "@#{address.to_s}\n"
+      asm += "M=D\n"  
+    else
+      error "pop: Wrong segment defined: #{segment.to_s}"
+    end
+    
+    asm += spdec
+    return asm
   end
 
   def add
@@ -307,6 +377,44 @@ class Parser
      asm  = "@SP\n"
      asm += "M=M-1\n"  
      return asm
+  end
+  
+  def push_helper(registername)
+    index = @args[1].to_i
+
+    asm  = "@#{registername}\n"
+    asm += "D=M\n"  # D contains contents of LCL-register (=points to base-address of local-segment)
+    asm += "@#{index.to_s}\n"
+    asm += "A=A+D\n"
+    asm += "D=M\n"  # Now D contains contents of LCL+index register
+    asm += "@SP\n"
+    asm += "A=M\n"
+    asm += "M=D\n"
+
+    return asm
+  end
+  
+  def pop_helper(registername)
+    index = @args[1].to_i
+
+    asm  = "@SP\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n"  # D contains value of SP-1 register
+    asm += "@R13\n"
+    asm += "M=D\n"  # value to pop sits in R13 now
+    asm += "@"+registername+"\n"
+    asm += "D=M\n"  # D contains contents of LCL/ARG/...-register (=points to base-address of segment)
+    asm += "@#{index.to_s}\n"
+    asm += "D=A+D\n"
+    asm += "@R14\n" # address to LCL+index sits in R14
+    asm += "M=D\n"
+    asm += "@R13\n" # Get value again
+    asm += "D=M\n"
+    asm += "@R14\n" # push value in LCL+index register
+    asm += "A=M\n"
+    asm += "M=D\n"
+    
+    return asm
   end
 end
 
