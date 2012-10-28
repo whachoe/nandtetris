@@ -34,7 +34,10 @@ class Parser
     "lt"    => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :lt},
     "gt"    => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :gt},
     "not"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :notf},
-    "neg"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :neg}
+    "neg"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :neg},
+    "label" => {"type" => C_LABEL, "args" => 1, "asm" => :label},
+    "goto"  => {"type" => C_GOTO, "args" => 1, "asm" => :gotof},
+    "if-goto" => {"type" => C_IF, "args" => 1, "asm" => :ifgoto}
   }
   
   attr_reader :command, :args, :filename, :linenumber, :commandinfo
@@ -67,6 +70,29 @@ class Parser
     end
   end
 
+  def gotof
+    labelname = @args[0]
+    asm  = "@#{labelname}\n"
+    asm += "0;JMP\n"
+    
+    return asm
+  end
+  
+  def label
+    labelname = @args[0]
+    asm = "(#{labelname})\n"
+    
+    return asm
+  end
+  
+  def ifgoto
+    labelname = @args[0]
+    
+    asm = ""
+    
+    return asm
+  end
+  
   def push 
     segment = @args[0]
     index   = @args[1]
@@ -160,18 +186,10 @@ class Parser
 
   def add
     asm  = "@SP\n"
-    asm += "A=M\n"    # A holds pointer to next stack item
-    asm += "D=A-1\n"  # D holds pointer to last inserted stack item 
-    asm += "@R14\n"
-    asm += "M=D\n"    # R14 holds pointer to last inserted stack item
-    asm += "@R13\n"
-    asm += "M=D-1\n"  # R13 holds pointer to second last inserted stack item
-    asm += "@R14\n"
-    asm += "A=M\n"
-    asm += "D=M\n"   
-    asm += "@R13\n" 
-    asm += "A=M\n"
-    asm += "M=M+D\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "A=A-1\n"
+    asm += "M=D+M\n"
     asm += spdec
     
     return asm
@@ -179,18 +197,10 @@ class Parser
 
   def sub
     asm  = "@SP\n"
-    asm += "A=M\n"    # A holds pointer to next stack item
-    asm += "D=A-1\n"  # D holds pointer to last inserted stack item 
-    asm += "@R14\n"
-    asm += "M=D\n"    # R14 holds pointer to last inserted stack item (arg2)
-    asm += "@R13\n"
-    asm += "M=D-1\n"  # R13 holds pointer to second last inserted stack item (arg1)
-    asm += "@R14\n"
-    asm += "A=M\n"
-    asm += "D=M\n"   
-    asm += "@R13\n" 
-    asm += "A=M\n"
-    asm += "M=M-D\n"   # only this is different from sum
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "A=A-1\n"
+    asm += "M=M-D\n"
     asm += spdec
     
     return asm
@@ -199,17 +209,9 @@ class Parser
   def eq
     # first we sub
     asm  = "@SP\n"
-    asm += "A=M\n"    # A holds pointer to next stack item
-    asm += "D=A-1\n"  # D holds pointer to last inserted stack item 
-    asm += "@R14\n"
-    asm += "M=D\n"    # R14 holds pointer to last inserted stack item (arg2)
-    asm += "@R13\n"
-    asm += "M=D-1\n"  # R13 holds pointer to second last inserted stack item (arg1)
-    asm += "@R14\n"
-    asm += "A=M\n"
-    asm += "D=M\n"   
-    asm += "@R13\n" 
-    asm += "A=M\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "A=A-1\n"
     asm += "D=M-D\n"   # only this is different from sum
     
     # Now we compare
@@ -217,16 +219,18 @@ class Parser
     asm += "D;JEQ\n"
     
     # NOT EQUAL: store 0 in stack (0 means: FALSE)
-    asm += "@R13\n"
-    asm += "A=M\n"
+    asm += "@SP\n"
+    asm += "A=M-1\n"
+    asm += "A=A-1\n"
     asm += "M=0\n"
     asm += "@eq#{@filename}.#{@linenumber}.done\n"
     asm += "0;JMP\n"
     
     # EQUAL: store -1 in stack (-1 means: TRUE)
     asm += "(eq#{@filename}.#{@linenumber})\n"
-    asm += "@R13\n"
-    asm += "A=M\n"
+    asm += "@SP\n"
+    asm += "A=M-1\n"
+    asm += "A=A-1\n"
     asm += "M=-1\n"
     asm += "(eq#{@filename}.#{@linenumber}.done)\n"
     asm += spdec
@@ -237,17 +241,9 @@ class Parser
   def gt
     # first we sub
     asm  = "@SP\n"
-    asm += "A=M\n"    # A holds pointer to next stack item
-    asm += "D=A-1\n"  # D holds pointer to last inserted stack item 
-    asm += "@R14\n"
-    asm += "M=D\n"    # R14 holds pointer to last inserted stack item (arg2)
-    asm += "@R13\n"
-    asm += "M=D-1\n"  # R13 holds pointer to second last inserted stack item (arg1)
-    asm += "@R14\n"
-    asm += "A=M\n"
-    asm += "D=M\n"   
-    asm += "@R13\n" 
-    asm += "A=M\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "A=A-1\n"
     asm += "D=M-D\n"   # only this is different from sum
     
     # Now we compare
@@ -255,16 +251,18 @@ class Parser
     asm += "D;JGT\n"
     
     # NOT EQUAL: store 0 in stack (0 means: FALSE)
-    asm += "@R13\n"
-    asm += "A=M\n"
+    asm += "@SP\n"
+    asm += "A=M-1\n"
+    asm += "A=A-1\n"
     asm += "M=0\n"
     asm += "@gt#{@filename}.#{@linenumber}.done\n"
     asm += "0;JMP\n"
     
     # EQUAL: store -1 in stack (-1 means: TRUE)
     asm += "(gt#{@filename}.#{@linenumber})\n"
-    asm += "@R13\n"
-    asm += "A=M\n"
+    asm += "@SP\n"
+    asm += "A=M-1\n"
+    asm += "A=A-1\n"
     asm += "M=-1\n"
     asm += "(gt#{@filename}.#{@linenumber}.done)\n"
     asm += spdec
@@ -275,17 +273,9 @@ class Parser
   def lt
     # first we sub
     asm  = "@SP\n"
-    asm += "A=M\n"    # A holds pointer to next stack item
-    asm += "D=A-1\n"  # D holds pointer to last inserted stack item 
-    asm += "@R14\n"
-    asm += "M=D\n"    # R14 holds pointer to last inserted stack item (arg2)
-    asm += "@R13\n"
-    asm += "M=D-1\n"  # R13 holds pointer to second last inserted stack item (arg1)
-    asm += "@R14\n"
-    asm += "A=M\n"
-    asm += "D=M\n"   
-    asm += "@R13\n" 
-    asm += "A=M\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "A=A-1\n"
     asm += "D=M-D\n"   # only this is different from sum
     
     # Now we compare
@@ -293,16 +283,18 @@ class Parser
     asm += "D;JLT\n"
     
     # NOT EQUAL: store 0 in stack (0 means: FALSE)
-    asm += "@R13\n"
-    asm += "A=M\n"
+    asm += "@SP\n"
+    asm += "A=M-1\n"
+    asm += "A=A-1\n"
     asm += "M=0\n"
     asm += "@lt#{@filename}.#{@linenumber}.done\n"
     asm += "0;JMP\n"
     
     # EQUAL: store -1 in stack (-1 means: TRUE)
     asm += "(lt#{@filename}.#{@linenumber})\n"
-    asm += "@R13\n"
-    asm += "A=M\n"
+    asm += "@SP\n"
+    asm += "A=M-1\n"
+    asm += "A=A-1\n"
     asm += "M=-1\n"
     asm += "(lt#{@filename}.#{@linenumber}.done)\n"
     asm += spdec
@@ -312,17 +304,9 @@ class Parser
 
   def andf
     asm  = "@SP\n"
-    asm += "A=M\n"    # A holds pointer to next stack item
-    asm += "D=A-1\n"  # D holds pointer to last inserted stack item 
-    asm += "@R14\n"
-    asm += "M=D\n"    # R14 holds pointer to last inserted stack item (arg2)
-    asm += "@R13\n"
-    asm += "M=D-1\n"  # R13 holds pointer to second last inserted stack item (arg1)
-    asm += "@R14\n"
-    asm += "A=M\n"
-    asm += "D=M\n"   
-    asm += "@R13\n" 
-    asm += "A=M\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "A=A-1\n"
     asm += "M=M&D\n"   # only this is different from sum
     asm += spdec
     
@@ -331,18 +315,10 @@ class Parser
 
   def orf
     asm  = "@SP\n"
-    asm += "A=M\n"    # A holds pointer to next stack item
-    asm += "D=A-1\n"  # D holds pointer to last inserted stack item 
-    asm += "@R14\n"
-    asm += "M=D\n"    # R14 holds pointer to last inserted stack item (arg2)
-    asm += "@R13\n"
-    asm += "M=D-1\n"  # R13 holds pointer to second last inserted stack item (arg1)
-    asm += "@R14\n"
-    asm += "A=M\n"
-    asm += "D=M\n"   
-    asm += "@R13\n" 
-    asm += "A=M\n"
-    asm += "M=M|D\n"   # only this is different from sum
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "A=A-1\n"
+    asm += "M=D|M\n"
     asm += spdec
 
     return asm
@@ -452,6 +428,7 @@ while fn=files.pop
     end
   end
   
+  # Write out the actual ASM code
   parseobjects.each {|p|
     puts p.method(p.commandinfo["asm"]).call
   }
