@@ -37,7 +37,10 @@ class Parser
     "neg"   => {"type" => C_ARITHMETIC, "args" => 0, "asm" => :neg},
     "label" => {"type" => C_LABEL, "args" => 1, "asm" => :label},
     "goto"  => {"type" => C_GOTO, "args" => 1, "asm" => :gotof},
-    "if-goto" => {"type" => C_IF, "args" => 1, "asm" => :ifgoto}
+    "if-goto"  => {"type" => C_IF, "args" => 1, "asm" => :ifgoto},
+    "function" => {"type" => C_FUNCTION, "args" => 2, "asm" => :functionf},
+    "return"   => {"type" => C_RETURN, "args" => 0, "asm" => :returnf},
+    "call"     => {"type" => C_CALL, "args" => 2, "asm" => :callf}
   }
   
   attr_reader :command, :args, :filename, :linenumber, :commandinfo
@@ -70,9 +73,167 @@ class Parser
     end
   end
 
+  # Should be called once for a compilation: Start of the assembler file
+  def self.bootstrap
+    asm  = ""
+    asm += "@256\n"
+    asm += "D=A\n"
+    asm += "@0\n"
+    asm += "M=D\n"
+    
+    p = Parser.new("sys", "call Sys.init", 0)
+    asm += p.method(p.commandinfo["asm"]).call
+    
+    return asm
+  end
+    
+  def functionf
+    @@current_function = @args[0]
+    arg_count = @args[1]
+    functionlabel = "(function.#{@filename}.#{@@current_function})\n"
+    
+    asm  = functionlabel
+    (1..arg_count.to_i).each do
+      asm += "@SP\n"
+      asm += "A=M\n"
+      asm += "M=0\n"
+      asm += spinc
+    end
+    
+    return asm
+  end
+  
+  # TODO: This one can be optimized a lot, but i'm too tired now to get to it
+  def returnf
+    @@current_function = ""
+    asm = ""
+    
+    # FRAME = LCL
+    asm += "@LCL\n"
+    asm += "D=M\n"
+    # RET = *(FRAME-5)
+    asm += "@5\n"
+    asm += "A=D-A\n"
+    asm += "D=M\n"
+    asm += "@R14\n"
+    asm += "M=D\n"   # Return address in R14
+    # *ARG = pop()
+    asm += "@SP\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n" 
+    asm += "@ARG\n"
+    asm += "A=M\n"
+    asm += "M=D\n"
+    # SP = ARG+1
+    asm += "D=A+1\n"
+    asm += "@SP\n"
+    asm += "M=D\n"
+    # THAT = *(FRAME-1)
+    asm += "@LCL\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "@THAT\n"
+    asm += "M=D\n"
+    # THIS = *(FRAME-2)
+    asm += "@LCL\n"
+    asm += "A=M\n"
+    asm += "A=A-1\n"
+    asm += "A=A-1\n"
+    asm += "D=M\n"
+    asm += "@THIS\n"
+    asm += "M=D\n"
+    # ARG  = *(FRAME-3)
+    asm += "@LCL\n"
+    asm += "A=M\n"
+    asm += "A=A-1\n"
+    asm += "A=A-1\n"
+    asm += "A=A-1\n"    
+    asm += "D=M\n"
+    asm += "@ARG\n"
+    asm += "M=D\n"
+    # LCL  = *(FRAME-4)
+    asm += "@LCL\n"
+    asm += "A=M\n"
+    asm += "A=A-1\n"
+    asm += "A=A-1\n"
+    asm += "A=A-1\n"
+    asm += "A=A-1\n"    
+    asm += "D=M\n"
+    asm += "@LCL\n"
+    asm += "M=D\n"
+    # goto RET
+    asm += "@R14\n"
+    asm += "A=M\n"
+    asm += "0;JMP\n"
+    
+    return asm
+  end
+  
+  def callf
+    functionname = @args[0]
+    arg_count    = @args[1]
+    return_address = "call.#{functionname}.#{@linenumber}.return"
+    
+    asm  = ""
+    # push return-address
+    asm += "@#{return_address}\n"
+    asm += "D=A\n"
+    asm += "@SP\n"
+    asm += "A=M\n"
+    asm += "M=D\n"
+    asm += spinc
+    # push LCL
+    asm += "@LCL\n"
+    asm += "D=M\n"
+    asm += "@SP\n"
+    asm += "A=M\n"
+    asm += "M=D\n"
+    asm += spinc
+    # push ARG
+    asm += "@ARG\n"
+    asm += "D=M\n"
+    asm += "@SP\n"
+    asm += "A=M\n"
+    asm += "M=D\n"
+    asm += spinc
+    # push THIS
+    asm += "@THIS\n"
+    asm += "D=M\n"
+    asm += "@SP\n"
+    asm += "A=M\n"
+    asm += "M=D\n"
+    asm += spinc
+    # push THAT
+    asm += "@THAT\n"
+    asm += "D=M\n"
+    asm += "@SP\n"
+    asm += "A=M\n"
+    asm += "M=D\n"
+    asm += spinc
+    # ARG = SP-arg_count-5
+    asm += "@5\n"
+    asm += "D=A\n"
+    asm += "@#{arg_count.to_s}\n"
+    asm +="D=D-A\n"
+    asm += "@SP\n"
+    asm += "D=M-D\n"
+    asm += "@ARG\n"
+    asm += "M=D\n"
+    # LCL = SP
+    asm += "@LCL\n"
+    asm += "M=D\n"
+    # goto f
+    asm += "@function.#{@filename}.#{@functionname}\n"
+    asm += "0;JMP\n"
+    # (return-address)
+    asm += "(#{return_address})\n"
+    
+    return asm
+  end
+  
   def gotof
     labelname = @args[0]
-    asm  = "@#{labelname}\n"
+    asm  = "@label.#{@filename}.#{labelname}\n"
     asm += "0;JMP\n"
     
     return asm
@@ -80,7 +241,7 @@ class Parser
   
   def label
     labelname = @args[0]
-    asm = "(#{labelname})\n"
+    asm = "(label.#{@filename}.#{labelname})\n"
     
     return asm
   end
@@ -88,7 +249,13 @@ class Parser
   def ifgoto
     labelname = @args[0]
     
-    asm = ""
+    asm  = "@SP\n"
+    asm += "A=M-1\n"
+    asm += "D=M\n"
+    asm += "@SP\n"
+    asm += "M=M-1\n"
+    asm += "@label.#{@filename}.#{labelname}\n"
+    asm += "D;JNE\n"
     
     return asm
   end
@@ -408,6 +575,9 @@ end
 if File.directory? filename
   files = Dir[filename+'/*.vm']
 end
+
+# Bootstrap code first
+#puts Parser.bootstrap
 
 while fn=files.pop
   f = File.open(fn)
