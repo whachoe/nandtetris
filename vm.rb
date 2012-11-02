@@ -353,22 +353,22 @@ class Parser
 
   def add
     asm  = "@SP\n"
-    asm += "A=M-1\n"
+    asm += "AM=M-1\n"
     asm += "D=M\n"
     asm += "A=A-1\n"
     asm += "M=D+M\n"
-    asm += spdec
+    #asm += spdec
     
     return asm
   end
 
   def sub
     asm  = "@SP\n"
-    asm += "A=M-1\n"
+    asm += "AM=M-1\n"
     asm += "D=M\n"
     asm += "A=A-1\n"
     asm += "M=M-D\n"
-    asm += spdec
+    #asm += spdec
     
     return asm
   end
@@ -471,22 +471,22 @@ class Parser
 
   def andf
     asm  = "@SP\n"
-    asm += "A=M-1\n"
+    asm += "AM=M-1\n"
     asm += "D=M\n"
     asm += "A=A-1\n"
     asm += "M=M&D\n"   # only this is different from sum
-    asm += spdec
+    #asm += spdec
     
     return asm
   end
 
   def orf
     asm  = "@SP\n"
-    asm += "A=M-1\n"
+    asm += "AM=M-1\n"
     asm += "D=M\n"
     asm += "A=A-1\n"
     asm += "M=D|M\n"
-    asm += spdec
+    #asm += spdec
 
     return asm
   end
